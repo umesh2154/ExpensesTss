@@ -1,0 +1,171 @@
+/* ===== Reset ===== */
+body{
+    margin:0;
+    font-family: Arial, Helvetica, sans-serif;
+    background:#f4f6f9;
+    display:flex;
+}
+
+/* ===== Sidebar ===== */
+.sidebar{
+    width:220px;
+    background:#1e1e2f;
+    color:white;
+    min-height:100vh;
+    padding:20px;
+    box-sizing:border-box;
+    transition:0.3s ease;
+}
+
+.sidebar h3{
+    margin-top:0;
+    margin-bottom:20px;
+    text-align:center;
+}
+
+.sidebar a{
+    display:flex;
+    align-items:center;
+    padding:10px;
+    margin-bottom:8px;
+    text-decoration:none;
+    color:white;
+    border-radius:6px;
+    cursor:pointer;
+    transition:0.2s;
+}
+
+.sidebar a:hover{
+    background:#2e2e48;
+}
+
+.sidebar a.active{
+    background:#4c4cff;
+}
+
+.sidebar .icon{
+    margin-right:10px;
+}
+
+.sidebar button{
+    width:100%;
+    padding:8px;
+    background:#ff4d4d;
+    border:none;
+    color:white;
+    border-radius:6px;
+    cursor:pointer;
+    margin-top:15px;
+}
+
+.sidebar button:hover{
+    background:#e60000;
+}
+
+/* Collapsed sidebar */
+.sidebar.collapsed{
+    width:60px;
+}
+
+.sidebar.collapsed .label,
+.sidebar.collapsed h3{
+    display:none;
+}
+
+/* ===== Main Section ===== */
+.main{
+    flex:1;
+    padding:20px;
+    transition:0.3s ease;
+}
+
+/* Toggle button */
+.toggle-btn{
+    font-size:22px;
+    background:none;
+    border:none;
+    cursor:pointer;
+    margin-bottom:10px;
+}
+
+/* Center welcome */
+.center-welcome{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+/* ===== Cards ===== */
+.card{
+    background:white;
+    padding:15px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    margin-bottom:20px;
+}
+
+.horizontal{
+    display:flex;
+    gap:20px;
+}
+
+.half{
+    flex:1;
+}
+
+/* ===== Forms ===== */
+input, select{
+    width:100%;
+    padding:8px;
+    margin-bottom:10px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+button{
+    padding:8px 12px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    background:#4c4cff;
+    color:white;
+}
+
+button:hover{
+    opacity:0.9;
+}
+
+/* ===== Tables ===== */
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+}
+
+table th{
+    background:#4c4cff;
+    color:white;
+    padding:8px;
+}
+
+table td{
+    padding:8px;
+    border-bottom:1px solid #ddd;
+    text-align:center;
+}
+
+table tr:hover{
+    background:#f2f2f2;
+}
+
+/* ===== Hidden Sections ===== */
+.hidden{
+    display:none;
+}
+
+/* ===== Success Messages ===== */
+.success-msg{
+    color:green;
+    font-weight:bold;
+}
+
+

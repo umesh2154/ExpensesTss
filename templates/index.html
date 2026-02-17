@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Expense Tracker System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
+</head>
+<body>
+  <div class="hero">
+    <div class="overlay">
+      <h1>💰 Welcome to Expense Tracker System</h1>
+      <p>Track your expenses, manage your budget, and stay in control of your finances.</p>
+      <div class="buttons">
+        <a href="/login" class="btn">Login</a>
+        <a href="/register" class="btn btn-secondary">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <section class="features">
+    <h2>✨ Features</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <h3>📊 Dashboard</h3>
+        <p>View your spending trends and summaries in one place.</p>
+      </div>
+      <div class="feature">
+        <h3>💵 Expense Logging</h3>
+        <p>Quickly add and categorize your daily expenses.</p>
+      </div>
+      <div class="feature">
+        <h3>🔒 Secure Login</h3>
+        <p>Your data is safe with password hashing and secure sessions.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>&copy; 2026 Expense Tracker System | Designed by Umesh & Aashis</p>
+  </footer>
+</body>
+</html>

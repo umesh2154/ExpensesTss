@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login | Expense Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='lstyle.css') }}">
+</head>
+<body>
+  <div class="login-container">
+    <h2>🔑 Login</h2>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form action="/login" method="POST">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" class="form-input" required>
+      </div>
+
+      <div class="form-group password-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" class="form-input" required>
+        <span class="toggle-password" onclick="togglePassword('password', this)">👀</span>
+      </div>
+
+      <div class="form-group">
+        <label for="role">Login as:</label>
+        <select id="role" name="role" class="form-input">
+          <option value="user" selected>User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn-login">Login</button>
+    </form>
+
+    <div class="register-link">
+      <p>Don’t have an account? <a href="/register">Register here</a></p>
+      <a href="/" class="btn-back">⬅ Back to Home</a>
+    </div>
+  </div>
+
+  <!-- JavaScript for toggle -->
+  <script>
+    function togglePassword(id, el) {
+      const input = document.getElementById(id);
+      if (input.type === "password") {
+        input.type = "text";
+        el.textContent = "🙈";   // visible → monkey hide face
+      } else {
+        input.type = "password";
+        el.textContent = "👀";   // hidden → eye icon
+      }
+    }
+  </script>
+</body>
+</html>

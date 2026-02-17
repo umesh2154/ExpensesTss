@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register | Expense Tracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='rstyle.css') }}">
+</head>
+<body>
+  <div class="register-container">
+    <h2>📝 Register</h2>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flash-messages">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Register form -->
+    <form action="/register" method="POST">
+      <div class="form-group">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" class="form-input" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" class="form-input" required>
+      </div>
+
+      <div class="form-group">
+        <label for="age">Age:</label>
+        <input type="number" id="age" name="age" class="form-input" required>
+      </div>
+<div class="form-group password-group">
+  <label for="password">Password:</label>
+  <input type="password" id="password" name="password" class="form-input" required>
+  <span class="toggle-password" onclick="togglePassword('password', this)">👀</span>
+</div>
+
+<div class="form-group password-group">
+  <label for="confirm_password">Confirm Password:</label>
+  <input type="password" id="confirm_password" name="confirm_password" class="form-input" required>
+  <span class="toggle-password" onclick="togglePassword('confirm_password', this)">👀</span>
+</div>
+
+
+      <button type="submit" class="btn-register">Register</button>
+    </form>
+
+    <div class="login-link">
+      <p>Already have an account? <a href="/login">Login here</a></p>
+      <!-- Back to Home button -->
+      <a href="/" class="btn-back">⬅ Back to Home</a>
+    </div>
+  </div>
+
+  <!-- JavaScript for toggle passwordssss -->
+ 
+<script>
+  function togglePassword(id, el) {
+    const input = document.getElementById(id);
+    if (input.type === "password") {
+      input.type = "text";
+      el.textContent = "🙈";   // show eye when visible
+    } else {
+      input.type = "password";
+      el.textContent = "👀";   // monkey hide face when hidden
+    }
+  }
+</script>
+
+</body>
+</html>

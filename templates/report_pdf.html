@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Expense Report - {{ username }}</title>
+  <style>
+    body { font-family: DejaVu Sans, Arial, sans-serif; color:#222; }
+    .header { text-align:center; margin-bottom:12px }
+    .title { font-size:20px; font-weight:700 }
+    .meta { font-size:12px; color:#444 }
+    table { width:100%; border-collapse:collapse; margin-top:12px }
+    th, td { border:1px solid #ccc; padding:6px; font-size:12px }
+    th { background:#f0f0f0 }
+    .right { text-align:right }
+    .summary { margin-top:12px }
+    .ai { margin-top:14px; padding:10px; background:#f6fbff; border-left:4px solid #3b82f6 }
+    .signature { margin-top:28px; display:flex; justify-content:space-between; }
+    .sig-box { width:40%; text-align:center }
+    .small { font-size:11px; color:#666 }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Expense Tracker — Report</div>
+    <div class="meta">User: <strong>{{ username }}</strong> &nbsp;|&nbsp; Generated: {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th style="width:18%">Date</th><th>Item</th><th>Category</th><th style="width:14%">Cost (Rs)</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r[0] }}</td>
+        <td>{{ r[1] }}</td>
+        <td>{{ r[2] }}</td>
+        <td class="right">{{ '%.2f'|format(r[3] or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="summary">
+    <p><strong>Total Budget:</strong> Rs {{ '%.2f'|format(total_budget) }}</p>
+    <p><strong>Total Expense:</strong> Rs {{ '%.2f'|format(total_expense) }}</p>
+    <p><strong>Remaining:</strong> Rs {{ '%.2f'|format(remaining_budget if remaining_budget is not none else (total_budget - total_expense)) }}</p>
+  </div>
+
+  <div class="ai">
+    <strong>AI Suggestion:</strong>
+    <p>{{ ai_message }}</p>
+  </div>
+
+  <div class="signature">
+    <div class="sig-box">
+      <div style="border-top:1px solid #999; margin-top:60px">User Signature</div>
+      <div class="small">Sign to acknowledge report</div>
+    </div>
+    <div class="sig-box">
+      <div style="border-top:1px solid #999; margin-top:60px">AI Assistant</div>
+      <div class="small">Auto-signed by ExpenseTracker AI</div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='dash.css') }}">
+    <script>
+        function confirmLogout() {
+            if (confirm("Do you want to log out from here?")) {
+                window.location.href = "/logout";
+            }
+        }
+
+        
+    </script>
+</head>
+
+<body>
+
+    <div class="sidebar" id="sidebar">
+        <h3>Dashboard</h3>
+        <a id="nav-welcome" class="nav-item"><span class="icon">🏠</span><span class="label">Home</span></a>
+        <a id="nav-expenses" class="nav-item"><span class="icon">💸</span><span class="label">Expenses</span></a>
+        <a id="nav-assistant" class="nav-item"><span class="icon">📝</span><span class="label">Edit
+                Information</span></a>
+        <a id="nav-report" class="nav-item"><span class="icon">📄</span><span class="label">Expense Report</span></a>
+        <button onclick="confirmLogout()">Logout</button>
+    </div>
+
+    <div class="main">
+        <button id="toggle-btn" class="toggle-btn">☰</button>
+        <h2 class="center-welcome">{{message}}</h2>
+
+
+        {% if role == 'admin' %}
+        <div class="card" style="margin-bottom:12px">
+            <label for="admin-user-select"><b>Admin: Select user</b></label>
+            <select id="admin-user-select">
+                <option value="">-- choose user --</option>
+            </select>
+            <button id="admin-load-user">Load</button>
+        </div>
+        {% endif %}
+
+        <div id="welcome-chart-card" class="card">
+            <h3>Weekly Expenses Summary</h3>
+            <p>Click a week below to view that week's expenses in the report.</p>
+        </div>
+        <div id="weekly-boxes" class="card horizontal" style="align-items:stretch;">
+            <!-- weekly boxes populated by JS -->
+        </div>
+
+        <!-- Expenses Section (hidden by default) -->
+        <div id="expenses-section" class="card hidden">
+            <div class="horizontal">
+                <div class="half">
+                    <h3>Budget</h3>
+                    <form id="budget-form" method="POST" action="/set-budget">
+                        <input name="budget" id="budget-input" placeholder="Set budget" value="{{ remaining_budget if remaining_budget is not none else '' }}">
+                        <button type="submit">Save Budget</button>
+                    </form>
+                    <p><b>Current Budget:</b> <span id="current-budget">{{ remaining_budget if remaining_budget is not none else 'N/A' }}</span></p>
+                </div>
+
+                <div class="half">
+                    <h3>Add Items / Cost</h3>
+                    <form id="add-expense-form">
+                        <input name="item" id="item" placeholder="Item name" required>
+                        <input name="cost" id="cost" placeholder="Cost" required>
+                        <button id="add-expense-btn">Add Expense</button>
+                    </form>
+                    <p id="expense-msg" class="success-msg" style="display:none; margin-top:8px"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assistant Section -->
+        <div id="assistant-section" class="card hidden">
+            <h3>Edit Information</h3>
+            <h4>Your info</h4>
+            <form id="profile-form">
+                <input name="username" id="username" placeholder="Username" value="{{ user[1] if user else '' }}">
+                <input name="email" id="email" placeholder="Email" value="{{ user[2] if user else '' }}">
+                <button id="save-profile">Save</button>
+            </form>
+            <p id="profile-msg" class="success-msg" style="display:none"></p>
+            </form>
+            <h4 style="margin-top:18px">Your Expenses</h4>
+            <table id="edit-table">
+                <tr>
+                    <th>Date</th>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Cost</th>
+                    <th>Actions</th>
+                </tr>
+                {% for e in expenses %}
+                <tr data-id="{{ e[0] }}">
+                    <td>{{ e[6] }}</td>
+                    <td class="item-col">{{ e[2] }}</td>
+                    <td>{{ e[3] }}</td>
+                    <td class="cost-col">{{ e[5] }}</td>
+                    <td>
+                        <button class="edit-btn" data-id="{{ e[0] }}">Edit</button>
+                        <button class="delete-btn" data-id="{{ e[0] }}">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+
+        <!-- Report Section -->
+        <div id="report-section" class="card hidden">
+            <h3>Expense Report</h3>
+            <button id="download-csv">Download CSV</button>
+            <button id="download-pdf" onclick="window.location.href='/download-pdf'">Download PDF</button>
+            <table id="report-table">
+                <tr>
+                    <th>Date</th>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Cost</th>
+                </tr>
+                {% for e in expenses %}
+                <tr>
+                    <td>{{ e[6] }}</td>
+                    <td>{{ e[2] }}</td>
+                    <td>{{ e[3] }}</td>
+                    <td>{{ e[5] }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            <p><b>Total Budget:</b> <span id="report-budget">{{ total_budget }}</span></p>
+            <p><b>Total Expense:</b> <span id="report-expense">{{ total_expense }}</span></p>
+            <p><b>Remaining Budget:</b> <span id="report-remaining">{{ remaining_budget if remaining_budget is not none
+                    else (total_budget - total_expense) }}</span></p>
+            {% if salary is not none %}
+            <p><b>Salary:</b> <span id="report-salary">{{ salary }}</span></p>
+            {% endif %}
+            <div id="ai-message-box" style="margin-top:12px; padding:8px; border-left:4px solid #6c6; background:#f8fdf8;">
+                <strong>AI Suggestion:</strong>
+                <p id="ai-message">{{ ai_message }}</p>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const toggleBtn = document.getElementById("toggle-btn");
+            if (toggleBtn) {
+                toggleBtn.addEventListener("click", function () {
+                    const sidebar = document.getElementById("sidebar");
+                    const main = document.querySelector(".main");
+
+                    sidebar.classList.toggle("collapsed");
+                    main.classList.toggle("full");
+                });
+            }
+        });
+    </script>
+
+
+
+    <script>
+        function showSection(name) {
+            // hide all main content blocks first
+            const welcomeEls = ['welcome-title', 'welcome-chart-card', 'weekly-boxes'];
+            welcomeEls.forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle('hidden', name !== 'welcome'); });
+            const sections = ['expenses', 'assistant', 'report'];
+            sections.forEach(s => {
+                const el = document.getElementById(s + '-section');
+                if (el) el.classList.toggle('hidden', name !== s);
+            });
+
+            // update active nav link
+            document.querySelectorAll('.sidebar a.nav-item').forEach(a => a.classList.remove('active'));
+            const map = { 'welcome': 'nav-welcome', 'expenses': 'nav-expenses', 'assistant': 'nav-assistant', 'report': 'nav-report' };
+            const active = document.getElementById(map[name]);
+            if (active) active.classList.add('active');
+            // update URL hash so the selected section persists on refresh
+            try {
+                history.replaceState(null, '', '#' + name);
+            } catch (e) {
+                window.location.hash = name;
+            }
+        }
+
+        document.getElementById('nav-welcome').addEventListener('click', () => showSection('welcome'));
+        document.getElementById('nav-expenses').addEventListener('click', () => showSection('expenses'));
+        document.getElementById('nav-assistant').addEventListener('click', () => showSection('assistant'));
+        document.getElementById('nav-report').addEventListener('click', () => showSection('report'));
+
+        document.getElementById('add-expense-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const data = new FormData(this);
+            // if admin selected a target user, include it
+            const adminSel = document.getElementById('admin-user-select');
+            if (adminSel && adminSel.value) { data.append('user_id', adminSel.value); }
+            fetch('/add-expense', { method: 'POST', body: data, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(async r => {
+                    const ct = r.headers.get('content-type') || '';
+                    if (ct.includes('application/json')) return r.json();
+                    // fallback: likely a redirect/HTML response — navigate to dashboard expenses
+                    window.location.href = '/dashboard#expenses';
+                    return null;
+                })
+                .then(res => {
+                    if (!res) return;
+                    const em = document.getElementById('expense-msg');
+                    if (res.error) {
+                        if (em) {
+                            em.textContent = res.error;
+                            em.style.display = 'block';
+                            em.style.color = 'red';
+                            setTimeout(() => { em.style.display = 'none'; em.style.color = ''; }, 5000);
+                        }
+                        return;
+                    }
+                    if (res.row) {
+                        const table = document.getElementById('report-table');
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td>${res.row[6]}</td><td>${res.row[2]}</td><td>${res.row[3]}</td><td>${res.row[5]}</td>`;
+                        table.appendChild(tr);
+                        document.getElementById('report-expense').textContent = res.total_expense;
+                        if (res.remaining_budget !== null && res.remaining_budget !== undefined) {
+                            const rb = res.remaining_budget;
+                            document.getElementById('report-remaining').textContent = rb;
+                            const totalExp = parseFloat(res.total_expense) || 0;
+                            const computedTotal = (parseFloat(rb) || 0) + totalExp;
+                            if (!isNaN(computedTotal)) document.getElementById('report-budget').textContent = computedTotal;
+                            const curEl = document.getElementById('current-budget');
+                            if (curEl) curEl.textContent = rb;
+                        }
+                        if (res.message) {
+                            if (em) { em.textContent = res.message; em.style.display = 'block'; em.style.color = 'green'; setTimeout(() => { em.style.display = 'none'; em.style.color = ''; }, 3000); }
+                        }
+                        document.getElementById('item').value = '';
+                        document.getElementById('cost').value = '';
+                    }
+                }).catch(err => {
+                    console.error(err);
+                    const em = document.getElementById('expense-msg');
+                    if (em) { em.textContent = 'Error adding expense. Refresh and try again.'; em.style.display = 'block'; em.style.color = 'red'; }
+                });
+        });
+
+        document.getElementById('profile-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const data = new FormData(this);
+            fetch('/update-profile', { method: 'POST', body: data })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.ok) {
+                        const msg = document.getElementById('profile-msg');
+                        msg.textContent = 'Edit successfully';
+                        msg.style.display = 'block';
+                        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                    }
+                }).catch(console.error);
+        });
+
+        document.getElementById('download-csv').addEventListener('click', () => { window.location.href = '/download-report'; });
+
+        showSection('welcome');
+    </script>
+
+    <!-- Chart removed to improve performance; weekly boxes show summaries below. -->
+
+    <script>
+        // fetch weekly aggregates and render boxes
+        async function loadWeeklyBoxes() {
+            try {
+                const res = await fetch('/expenses-weeks');
+                const weeks = await res.json();
+                const container = document.getElementById('weekly-boxes');
+                container.innerHTML = '';
+                weeks.forEach((w, idx) => {
+                    const box = document.createElement('div');
+                    box.className = 'half card';
+                    box.style.cursor = 'pointer';
+                    box.innerHTML = `<h4>Week ${idx + 1}</h4><p>${w.label}</p><p><b>Total:</b> ${w.total.toFixed(2)}</p>`;
+                    box.addEventListener('click', () => {
+                        // populate report table with items for this week
+                        const table = document.getElementById('report-table');
+                        // remove all rows except header
+                        // replace rows cleanly and ensure any pagination is reset
+                        table.querySelectorAll('tr:not(:first-child)').forEach(n => n.remove());
+                        w.items.forEach(it => {
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `<td>${it.date}</td><td>${it.item}</td><td>${it.category}</td><td>${it.cost}</td>`;
+                            table.appendChild(tr);
+                        });
+                        // update totals
+                        const repExpEl = document.getElementById('report-expense');
+                        if (repExpEl) repExpEl.textContent = w.total.toFixed(2);
+                        const remainingEl = document.getElementById('report-remaining');
+                        if (remainingEl) {
+                            const budgetVal = parseFloat(document.getElementById('report-budget').textContent) || 0;
+                            remainingEl.textContent = (budgetVal - w.total).toFixed(2);
+                        }
+                        // ensure report section is visible and scrolled to top
+                        showSection('report');
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        // if a table plugin added pagination controls, try to remove/reset them
+                        const pager = document.querySelector('.dataTables_paginate, .paginate');
+                        if (pager) pager.remove();
+                        // focus the report table container
+                        const rptContainer = document.getElementById('report-table');
+                        if (rptContainer) rptContainer.scrollIntoView({ behavior: 'smooth' });
+                    });
+                    container.appendChild(box);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        loadWeeklyBoxes();
+    </script>
+
+    <script>
+        // attach edit/delete handlers for rows in the Edit Information section
+        function attachEditDeleteHandlers() {
+            document.querySelectorAll('#edit-table .edit-btn').forEach(btn => {
+                btn.onclick = async function () {
+                    const id = this.dataset.id;
+                    const tr = this.closest('tr');
+                    const curItem = tr.querySelector('.item-col').textContent;
+                    const curCost = tr.querySelector('.cost-col').textContent;
+                    const newItem = prompt('Edit item name:', curItem);
+                    if (newItem === null) return;
+                    const newCost = prompt('Edit cost:', curCost);
+                    if (newCost === null) return;
+                    const fd = new FormData();
+                    fd.append('id', id);
+                    fd.append('item', newItem);
+                    fd.append('cost', newCost);
+                    try {
+                        const resp = await fetch('/edit-expense', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        const data = await resp.json();
+                        if (data.row) {
+                            // update row display
+                            tr.querySelector('.item-col').textContent = data.row[2];
+                            tr.querySelector('.cost-col').textContent = data.row[5];
+                            // update totals if present
+                            const repExp = document.getElementById('report-expense');
+                            if (repExp && data.total_expense !== undefined) repExp.textContent = data.total_expense;
+                            if (data.remaining_budget !== undefined && document.getElementById('report-remaining')) document.getElementById('report-remaining').textContent = data.remaining_budget;
+                            alert(data.message || 'Expense updated');
+                        } else if (data.error) {
+                            alert(data.error);
+                        }
+                    } catch (err) { console.error(err); alert('Update failed'); }
+                };
+            });
+
+            document.querySelectorAll('#edit-table .delete-btn').forEach(btn => {
+                btn.onclick = async function () {
+                    const id = this.dataset.id;
+                    if (!confirm('Delete this expense?')) return;
+                    const fd = new FormData(); fd.append('id', id);
+                    try {
+                        const resp = await fetch('/delete-expense', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        const data = await resp.json();
+                        if (data.deleted) {
+                            // remove row
+                            const tr = document.querySelector('#edit-table tr[data-id="' + id + '"]');
+                            if (tr) tr.remove();
+                            if (data.total_expense !== undefined && document.getElementById('report-expense')) document.getElementById('report-expense').textContent = data.total_expense;
+                            if (data.remaining_budget !== undefined && document.getElementById('report-remaining')) document.getElementById('report-remaining').textContent = data.remaining_budget;
+                            alert(data.message || 'Deleted');
+                        } else if (data.error) {
+                            alert(data.error);
+                        }
+                    } catch (err) { console.error(err); alert('Delete failed'); }
+                };
+            });
+        }
+
+        // run on initial load
+        attachEditDeleteHandlers();
+    </script>
+
+    {% if role == 'admin' %}
+    <script>
+        // Admin: fetch users and populate selector
+        async function loadAdminUsers() {
+            try {
+                const res = await fetch('/admin/users');
+                if (!res.ok) return;
+                const users = await res.json();
+                const sel = document.getElementById('admin-user-select');
+                users.forEach(u => {
+                    const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.username; sel.appendChild(opt);
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadAdminExpensesFor(uid) {
+            try {
+                const res = await fetch('/admin/expenses/' + uid);
+                if (!res.ok) return;
+                const data = await res.json();
+                // populate report table
+                const table = document.getElementById('report-table');
+                table.querySelectorAll('tr:not(:first-child)').forEach(n => n.remove());
+                data.items.forEach(it => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${it.date}</td><td>${it.item}</td><td>${it.category}</td><td>${it.cost}</td>`;
+                    table.appendChild(tr);
+                });
+                if (document.getElementById('report-expense')) document.getElementById('report-expense').textContent = data.total;
+                if (document.getElementById('report-remaining') && data.remaining !== null) document.getElementById('report-remaining').textContent = data.remaining;
+                // populate edit table as well
+                const et = document.getElementById('edit-table');
+                if (et) {
+                    et.querySelectorAll('tr:not(:first-child)').forEach(n => n.remove());
+                    data.items.forEach(it => {
+                        const tr = document.createElement('tr');
+                        tr.setAttribute('data-id', it.id);
+                        tr.innerHTML = `<td>${it.date}</td><td class="item-col">${it.item}</td><td>${it.category}</td><td class="cost-col">${it.cost}</td><td><button class="edit-btn" data-id="${it.id}">Edit</button> <button class="delete-btn" data-id="${it.id}">Delete</button></td>`;
+                        et.appendChild(tr);
+                    });
+                    attachEditDeleteHandlers();
+                }
+                showSection('report');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (err) { console.error(err); }
+        }
+
+        document.getElementById('admin-load-user').addEventListener('click', () => {
+            const sel = document.getElementById('admin-user-select');
+            const uid = sel.value;
+            if (uid) loadAdminExpensesFor(uid);
+        });
+
+        // load admin users on page load
+        loadAdminUsers();
+    </script>
+    {% endif %}
+
+</body>
+
+</html>
