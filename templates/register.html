@@ -34,7 +34,7 @@
 
       <div class="form-group">
         <label for="age">Age:</label>
-        <input type="number" id="age" name="age" class="form-input" required>
+        <input type="number" id="age" name="age" class="form-input" required min="18" oninvalid="this.setCustomValidity('You must be at least 18 years old')" oninput="this.setCustomValidity('')">
       </div>
 <div class="form-group password-group">
   <label for="password">Password:</label>

@@ -39,6 +39,13 @@
                 <option value="">-- choose user --</option>
             </select>
             <button id="admin-load-user">Load</button>
+            <button id="admin-manage-users">Manage Users</button>
+            <div id="admin-manage" style="display:none;margin-top:8px">
+                <table id="admin-users-table" style="width:100%;border-collapse:collapse"> 
+                    <thead><tr><th>User</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
         </div>
         {% endif %}
 
@@ -157,6 +164,30 @@
                     main.classList.toggle("full");
                 });
             }
+            // Budget form toggle: if a budget exists, hide the input and show a Change button
+            try {
+                const budgetForm = document.getElementById('budget-form');
+                const currentBudgetEl = document.getElementById('current-budget');
+                if (budgetForm && currentBudgetEl) {
+                    const val = (currentBudgetEl.textContent || '').trim();
+                    if (val !== '' && val.toLowerCase() !== 'n/a') {
+                        // hide the form and add a Change button
+                        budgetForm.style.display = 'none';
+                        const changeBtn = document.createElement('button');
+                        changeBtn.type = 'button';
+                        changeBtn.textContent = 'Change Budget';
+                        changeBtn.style.marginTop = '8px';
+                        changeBtn.addEventListener('click', function () {
+                            budgetForm.style.display = '';
+                            changeBtn.style.display = 'none';
+                            const inp = document.getElementById('budget-input');
+                            if (inp) inp.focus();
+                        });
+                        // insert after the current budget paragraph
+                        currentBudgetEl.parentNode.insertBefore(changeBtn, currentBudgetEl.nextSibling);
+                    }
+                }
+            } catch (e) { console.error(e); }
         });
     </script>
 
@@ -184,6 +215,9 @@
             } catch (e) {
                 window.location.hash = name;
             }
+
+            // persist active section in localStorage so refresh keeps the current section
+            try { localStorage.setItem('activeSection', name); } catch (e) { /* ignore */ }
         }
 
         document.getElementById('nav-welcome').addEventListener('click', () => showSection('welcome'));
@@ -262,7 +296,15 @@
 
         document.getElementById('download-csv').addEventListener('click', () => { window.location.href = '/download-report'; });
 
-        showSection('welcome');
+        // on load, prefer URL hash, then localStorage, otherwise default to welcome
+        try {
+            const fromHash = (window.location.hash || '').replace('#', '');
+            const fromStorage = localStorage.getItem('activeSection');
+            const initial = fromHash || fromStorage || 'welcome';
+            // validate allowed values
+            const allowed = ['welcome', 'expenses', 'assistant', 'report'];
+            showSection(allowed.includes(initial) ? initial : 'welcome');
+        } catch (e) { showSection('welcome'); }
     </script>
 
     <!-- Chart removed to improve performance; weekly boxes show summaries below. -->
@@ -392,6 +434,17 @@
                 users.forEach(u => {
                     const opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.username; sel.appendChild(opt);
                 });
+                // also populate management table if present
+                const tbody = document.querySelector('#admin-users-table tbody');
+                if (tbody) {
+                    tbody.innerHTML = '';
+                    users.forEach(u => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td style="padding:6px;border:1px solid #eee">${u.username}</td><td style="padding:6px;border:1px solid #eee"><button class="admin-edit" data-id="${u.id}">Edit</button> <button class="admin-delete" data-id="${u.id}">Delete</button></td>`;
+                        tbody.appendChild(tr);
+                    });
+                    attachAdminHandlers();
+                }
             } catch (err) { console.error(err); }
         }
 
@@ -435,6 +488,42 @@
 
         // load admin users on page load
         loadAdminUsers();
+
+        // Manage users toggle
+        document.getElementById('admin-manage-users').addEventListener('click', function(){
+            const el = document.getElementById('admin-manage');
+            if (!el) return; el.style.display = (el.style.display === 'none' ? 'block' : 'none');
+        });
+
+        function attachAdminHandlers(){
+            document.querySelectorAll('.admin-edit').forEach(btn => {
+                btn.onclick = async function(){
+                    const id = this.dataset.id;
+                    const newName = prompt('New username:');
+                    if (newName === null) return;
+                    try{
+                        const fd = new URLSearchParams({ id: id, username: newName });
+                        const res = await fetch('/admin/edit-user', { method: 'POST', body: fd });
+                        const j = await res.json();
+                        if (j.ok) { alert('Updated'); loadAdminUsers(); }
+                        else alert(j.error || 'Update failed');
+                    }catch(e){ console.error(e); alert('Update failed'); }
+                };
+            });
+            document.querySelectorAll('.admin-delete').forEach(btn => {
+                btn.onclick = async function(){
+                    const id = this.dataset.id;
+                    if (!confirm('Delete user and their expenses?')) return;
+                    try{
+                        const fd = new URLSearchParams({ id: id });
+                        const res = await fetch('/admin/delete-user', { method: 'POST', body: fd });
+                        const j = await res.json();
+                        if (j.ok) { alert('Deleted'); loadAdminUsers(); }
+                        else alert(j.error || 'Delete failed');
+                    }catch(e){ console.error(e); alert('Delete failed'); }
+                };
+            });
+        }
     </script>
     {% endif %}
 

@@ -220,6 +220,19 @@ def dashboard():
             total_budget = current_remaining + float(total_expense or 0)
         if 'salary' in user_col_names:
             salary = float(user[user_col_names.index('salary')] or 0)
+        # optional profile fields
+        bank_name = None
+        account_no = None
+        if 'bank_name' in user_col_names:
+            try:
+                bank_name = user[user_col_names.index('bank_name')]
+            except Exception:
+                bank_name = None
+        if 'account_no' in user_col_names:
+            try:
+                account_no = user[user_col_names.index('account_no')]
+            except Exception:
+                account_no = None
     except Exception:
         pass
 
@@ -293,7 +306,9 @@ def dashboard():
         salary=salary,
         ai_message=ai_message,
         user=user,
-        role=role
+        role=role,
+        bank_name=bank_name,
+        account_no=account_no
     )
 
 
@@ -414,6 +429,90 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/account')
+def account():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT * FROM users WHERE id=%s", (session['user_id'],))
+    row = cur.fetchone()
+    col_names = [d[0] for d in cur.description] if cur.description else []
+    user = {}
+    if row:
+        for i, c in enumerate(col_names):
+            user[c] = row[i]
+    # render account settings template expecting `user` mapping
+    return render_template('account_settings.html', user=user)
+
+
+@app.route('/account/update-profile', methods=['POST'])
+def account_update_profile():
+    if 'user_id' not in session:
+        return jsonify({'ok': False, 'error': 'not authenticated'}), 401
+    # fields we support updating via the account page
+    fields = ['first_name', 'middle_name', 'last_name', 'bank_name', 'account_no']
+    cur = mysql.connection.cursor()
+    # ensure columns exist before updating
+    for f in fields:
+        cur.execute("SHOW COLUMNS FROM users LIKE %s", (f,))
+        if not cur.fetchone():
+            # create as VARCHAR(255)
+            try:
+                cur.execute(f"ALTER TABLE users ADD COLUMN {f} VARCHAR(255)")
+                mysql.connection.commit()
+            except Exception:
+                pass
+    # build update set
+    updates = []
+    params = []
+    for f in fields:
+        v = request.form.get(f)
+        if v is not None:
+            updates.append(f + "=%s")
+            params.append(v)
+    if updates:
+        params.append(session['user_id'])
+        sql = "UPDATE users SET " + ",".join(updates) + " WHERE id=%s"
+        try:
+            cur.execute(sql, tuple(params))
+            mysql.connection.commit()
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'ok': False, 'error': str(e)}), 500
+    return jsonify({'ok': True})
+
+
+@app.route('/account/update-password', methods=['POST'])
+def account_update_password():
+    if 'user_id' not in session:
+        return jsonify({'ok': False, 'error': 'not authenticated'}), 401
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT * FROM users WHERE id=%s", (session['user_id'],))
+    row = cur.fetchone()
+    col_names = [d[0] for d in cur.description] if cur.description else []
+    try:
+        pwd_idx = col_names.index('password')
+    except ValueError:
+        pwd_idx = 4
+    stored = row[pwd_idx] if row else None
+    current = request.form.get('current_password', '')
+    newpwd = request.form.get('new_password', '')
+    confirm = request.form.get('confirm_password', '')
+    if stored != current:
+        return jsonify({'ok': False, 'error': 'Current password is incorrect'}), 400
+    if newpwd != confirm:
+        return jsonify({'ok': False, 'error': 'Passwords do not match'}), 400
+    # optional: enforce strength
+    if not is_strong_password(newpwd):
+        return jsonify({'ok': False, 'error': 'Password too weak'}), 400
+    try:
+        cur.execute("UPDATE users SET password=%s WHERE id=%s", (newpwd, session['user_id']))
+        mysql.connection.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/set-budget', methods=['POST'])
 def set_budget():
     if 'user_id' not in session:
@@ -439,10 +538,35 @@ def set_budget():
         cur.execute("UPDATE users SET budget=%s WHERE id=%s", (new_budget, session['user_id']))
         mysql.connection.commit()
     except Exception:
+        # return JSON for AJAX callers, otherwise flash and redirect
+        if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'ok': False, 'error': 'Invalid budget value'}), 400
         flash('Invalid budget value', 'error')
         return redirect(url_for('dashboard') + '#expenses')
-    # redirect back to dashboard and show the expenses section
+
+    # If AJAX request, return JSON with updated budget so front-end can update without reload
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({'ok': True, 'budget': new_budget})
+
+    # non-AJAX: redirect back to dashboard and show the expenses section
     return redirect(url_for('dashboard') + '#expenses')
+
+
+@app.route('/clear-budget', methods=['POST'])
+def clear_budget():
+    if 'user_id' not in session:
+        return jsonify({'ok': False, 'error': 'not authenticated'}), 401
+    cur = mysql.connection.cursor()
+    cur.execute("SHOW COLUMNS FROM users LIKE 'budget'")
+    if not cur.fetchone():
+        # nothing to clear
+        return jsonify({'ok': True})
+    try:
+        cur.execute("UPDATE users SET budget=NULL WHERE id=%s", (session['user_id'],))
+        mysql.connection.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/update-profile', methods=['POST'])
@@ -641,6 +765,68 @@ def admin_users():
     rows = cur.fetchall()
     users = [{'id': r[0], 'username': r[1]} for r in rows]
     return jsonify(users)
+
+
+@app.route('/admin/edit-user', methods=['POST'])
+def admin_edit_user():
+    if session.get('role') != 'admin':
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    uid = request.form.get('id') or (request.json.get('id') if request.is_json else None)
+    if not uid:
+        return jsonify({'ok': False, 'error': 'missing id'}), 400
+    try:
+        uid = int(uid)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'invalid id'}), 400
+    username = request.form.get('username') or (request.json.get('username') if request.is_json else None)
+    email = request.form.get('email') or (request.json.get('email') if request.is_json else None)
+    role = request.form.get('role') or (request.json.get('role') if request.is_json else None)
+    if not any([username, email, role]):
+        return jsonify({'ok': False, 'error': 'nothing to update'}), 400
+    cur = mysql.connection.cursor()
+    updates = []
+    params = []
+    if username is not None:
+        updates.append('username=%s'); params.append(username)
+    if email is not None:
+        updates.append('email=%s'); params.append(email)
+    if role is not None:
+        updates.append('role=%s'); params.append(role)
+    params.append(uid)
+    try:
+        cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=%s", tuple(params))
+        mysql.connection.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/admin/delete-user', methods=['POST'])
+def admin_delete_user():
+    if session.get('role') != 'admin':
+        return jsonify({'ok': False, 'error': 'forbidden'}), 403
+    uid = request.form.get('id') or (request.json.get('id') if request.is_json else None)
+    if not uid:
+        return jsonify({'ok': False, 'error': 'missing id'}), 400
+    try:
+        uid = int(uid)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'invalid id'}), 400
+    # Prevent admins from deleting their own account to avoid accidental lockout
+    try:
+        if 'user_id' in session and int(session['user_id']) == int(uid):
+            return jsonify({'ok': False, 'error': "Operation forbidden: cannot delete your own account"}), 400
+    except Exception:
+        pass
+    cur = mysql.connection.cursor()
+    try:
+        # delete expenses then user to keep DB consistent
+        cur.execute("DELETE FROM expenses WHERE user_id=%s", (uid,))
+        cur.execute("DELETE FROM users WHERE id=%s", (uid,))
+        mysql.connection.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/admin/expenses/<int:uid>')

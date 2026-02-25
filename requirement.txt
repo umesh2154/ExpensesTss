@@ -1,5 +1,5 @@
 Flask==2.2.5
-flask-mysql-connector>=0.5
-mysql-connector-python>=8.0
-cryptography>=40.0.0
+Flask-Login==0.6.2
+Flask-SQLAlchemy==3.0.3
+werkzeug==2.2.3
 weasyprint>=57.0
