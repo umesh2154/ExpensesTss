@@ -28,13 +28,40 @@
     </div>
 
     <div class="main">
-        <button id="toggle-btn" class="toggle-btn">☰</button>
-        <h2 class="center-welcome">{{message}}</h2>
+        <div class="top-bar">
+            <button id="toggle-btn" class="toggle-btn">☰</button>
+            <h2 class="center-welcome">{{message}}</h2>
+
+            <div class="account-dropdown" id="account-dropdown">
+                <button id="acct-btn" class="acct-btn">
+                    <span class="acct-avatar small">{{ (user[1][0] if user and user[1] else 'U') }}</span>
+                    <span class="acct-label">{{ user[1] if user else 'User' }}</span>
+                </button>
+                <div class="acct-menu" id="acct-menu" aria-hidden="true">
+                    <div class="acct-info">
+                        <div class="acct-avatar">{{ (user[1][0] if user and user[1] else 'U') }}</div>
+                        <div class="meta">
+                            <div class="acct-name">{{ user[1] if user else 'User' }}</div>
+                            <div class="acct-email">{{ user[2] if user else '' }}</div>
+                        </div>
+                    </div>
+                    <div class="acct-actions">
+                        <a href="/account">Profile</a>
+                        <a href="/logout" class="signout">Sign Out</a>
+                    </div>
+                </div>
+            </div>
+            <button id="theme-toggle" class="theme-toggle" aria-pressed="false">Light</button>
+        </div>
 
 
         {% if role == 'admin' %}
         <div class="card" style="margin-bottom:12px">
-            <label for="admin-user-select"><b>Admin: Select user</b></label>
+            <label for="admin-user-select"><b>Admin Panel</b></label>
+            <div style="margin-bottom: 10px;">
+                <button onclick="window.location.href='/admin/dashboard'" style="background: #5cb85c; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer;">📊 View All Users (Expenses by Category)</button>
+            </div>
+            <label for="admin-user-select"><b>Or select user:</b></label>
             <select id="admin-user-select">
                 <option value="">-- choose user --</option>
             </select>
@@ -72,7 +99,13 @@
                 <div class="half">
                     <h3>Add Items / Cost</h3>
                     <form id="add-expense-form">
-                        <input name="item" id="item" placeholder="Item name" required>
+                        <select name="category" id="category" required>
+                            <option value="">-- Select Category --</option>
+                            {% for cat in categories %}
+                            <option value="{{ cat }}">{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                        <input name="item" id="item" placeholder="Item name" style="display:none" />
                         <input name="cost" id="cost" placeholder="Cost" required>
                         <button id="add-expense-btn">Add Expense</button>
                     </form>
@@ -188,6 +221,25 @@
                     }
                 }
             } catch (e) { console.error(e); }
+                    // show/hide item input based on selected category (only show for "Miscellaneous Expenses")
+                    try {
+                        const category = document.getElementById('category');
+                        const item = document.getElementById('item');
+                        function updateItemVisibility() {
+                            if (!category || !item) return;
+                            const val = (category.value || '').toString().toLowerCase();
+                            if (val.includes('misc')) {
+                                item.style.display = '';
+                                item.required = true;
+                            } else {
+                                item.style.display = 'none';
+                                item.required = false;
+                                item.value = '';
+                            }
+                        }
+                        updateItemVisibility();
+                        if (category) category.addEventListener('change', updateItemVisibility);
+                    } catch (e) { console.error(e); }
         });
     </script>
 
@@ -318,10 +370,10 @@
                 const container = document.getElementById('weekly-boxes');
                 container.innerHTML = '';
                 weeks.forEach((w, idx) => {
-                    const box = document.createElement('div');
-                    box.className = 'half card';
-                    box.style.cursor = 'pointer';
-                    box.innerHTML = `<h4>Week ${idx + 1}</h4><p>${w.label}</p><p><b>Total:</b> ${w.total.toFixed(2)}</p>`;
+                        const box = document.createElement('div');
+                        box.className = 'week-box card';
+                        box.style.cursor = 'pointer';
+                        box.innerHTML = `<h4>Week ${idx + 1}</h4><p style="color:#555;margin:6px 0">${w.label}</p><p><b>Total:</b> ${w.total.toFixed(2)}</p>`;
                     box.addEventListener('click', () => {
                         // populate report table with items for this week
                         const table = document.getElementById('report-table');
@@ -526,6 +578,74 @@
         }
     </script>
     {% endif %}
+
+    <script>
+        // Account dropdown: reliable toggle + outside-click handling
+        (function(){
+            const btn = document.getElementById('acct-btn');
+            const menu = document.getElementById('acct-menu');
+            const dropdown = document.getElementById('account-dropdown');
+            if (!btn || !menu) return;
+
+            // open/close the menu reliably
+            btn.addEventListener('click', function(e){
+                e.stopPropagation();
+                const isOpen = menu.style.display === 'block' || menu.getAttribute('aria-hidden') === 'false';
+                if (isOpen) {
+                    menu.style.display = 'none';
+                    menu.setAttribute('aria-hidden','true');
+                } else {
+                    menu.style.display = 'block';
+                    menu.setAttribute('aria-hidden','false');
+                }
+            });
+
+            // prevent clicks inside menu from closing it immediately
+            menu.addEventListener('click', function(e){ e.stopPropagation(); });
+
+            // close when clicking outside the dropdown
+            document.addEventListener('click', function(e){
+                if (menu.style.display === 'block' && !dropdown.contains(e.target)) {
+                    menu.style.display = 'none';
+                    menu.setAttribute('aria-hidden','true');
+                }
+            });
+
+            // hide on Escape
+            document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { menu.style.display='none'; menu.setAttribute('aria-hidden','true'); } });
+        })();
+    </script>
+    <script>
+        // Theme toggle: persist in localStorage and apply class on body (yellow accent)
+        (function(){
+            const btn = document.getElementById('theme-toggle');
+            if (!btn) return;
+            function applyTheme(t){
+                if (t === 'yellow') {
+                    document.body.classList.add('yellow');
+                    btn.textContent = 'Yellow';
+                    btn.setAttribute('aria-pressed','true');
+                } else {
+                    document.body.classList.remove('yellow');
+                    btn.textContent = 'Light';
+                    btn.setAttribute('aria-pressed','false');
+                }
+            }
+            // initialize from saved preference (or default to light)
+            try{
+                const saved = localStorage.getItem('theme');
+                if (saved) applyTheme(saved);
+                else applyTheme('light');
+            }catch(e){ applyTheme('light'); }
+
+            btn.addEventListener('click', function(e){
+                const isYellow = document.body.classList.contains('yellow');
+                const next = isYellow ? 'light' : 'yellow';
+                try{ localStorage.setItem('theme', next); }catch(e){}
+                applyTheme(next);
+            });
+        })();
+    </script>
 
 </body>
 

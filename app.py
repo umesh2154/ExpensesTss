@@ -12,6 +12,19 @@ app.secret_key = "your_secret_key"
 
 init_db(app)
 
+# Category list for the app
+EXPENSE_CATEGORIES = [
+    'Food',
+    'Transportation',
+    'Housing',
+    'Utilities',
+    'Entertainment',
+    'Health',
+    'Education',
+    'Shopping',
+    'Miscellaneous'
+]
+
 # ---------------- Password Strength ----------------
 def is_strong_password(password):
     return (
@@ -37,7 +50,7 @@ def smart_category(item):
         'Health': ['doctor', 'hospital', 'pharmacy', 'medicine', 'clinic'],
         'Shopping': ['shop', 'clothes', 'shopping', 'amazon', 'flipkart', 'mall', 'buy'],
         'Education': ['school', 'tuition', 'course', 'books', 'library'],
-        'Others': []
+        'Miscellaneous': []
     }
 
     # direct substring match first (covers multi-word tokens)
@@ -69,7 +82,7 @@ def smart_category(item):
     except Exception:
         pass
 
-    return 'Others'
+    return 'Miscellaneous'
 
 # ---------------- INDEX ----------------
 @app.route('/')
@@ -132,7 +145,7 @@ def register():
 
 # ---------------- LOGIN ----------------
 @app.route('/login', methods=['GET','POST'])
-def login():
+def loghomein():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -142,18 +155,23 @@ def login():
         cur.execute("SELECT * FROM users WHERE username=%s", (username,))
         user = cur.fetchone()
         
+        # capture column names immediately after fetch so we can reference dynamically
+        col_names = [d[0] for d in cur.description] if cur.description else []
 
+        # determine account role and password index if available
         role = 'user'
+        pwd_idx = None
         if user:
-            col_names = [d[0] for d in cur.description]
             if 'role' in col_names:
                 try:
                     role = user[col_names.index('role')]
                 except Exception:
                     role = 'user'
+            if 'password' in col_names:
+                pwd_idx = col_names.index('password')
 
         # enforce requested role: if user requested admin but account is not admin, reject
-        if user and user[4] == password:
+        if user and pwd_idx is not None and user[pwd_idx] == password:
             if requested_role == 'admin' and role != 'admin':
                 flash('Access denied: your account is not an admin', 'error')
                 return render_template('login.html')
@@ -251,7 +269,7 @@ def dashboard():
                 (session['user_id'],)
             )
             cat_rows = cur.fetchall()
-            top_cats = [r[0] or 'Others' for r in cat_rows]
+            top_cats = [r[0] or 'Miscellaneous' for r in cat_rows]
         except Exception:
             top_cats = []
 
@@ -308,7 +326,8 @@ def dashboard():
         user=user,
         role=role,
         bank_name=bank_name,
-        account_no=account_no
+        account_no=account_no,
+        categories=EXPENSE_CATEGORIES
     )
 
 
@@ -332,7 +351,10 @@ def add_expense():
             return jsonify({'error': 'Invalid cost value'}), 400
         flash('Invalid cost value', 'error')
         return redirect(url_for('dashboard') + '#expenses')
-    category = smart_category(item)
+    # Get category from form, default to Miscellaneous if not provided
+    category = request.form.get('category', 'Miscellaneous')
+    if category not in EXPENSE_CATEGORIES:
+        category = 'Miscellaneous'
 
     cur = mysql.connection.cursor()
     # ensure user is authenticated
@@ -591,24 +613,40 @@ def download_report():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     cur = mysql.connection.cursor()
-    cur.execute("SELECT date_time, item, category, cost FROM expenses WHERE user_id=%s ORDER BY date_time", (session['user_id'],))
+    cur.execute("SELECT date_time, item, category, cost FROM expenses WHERE user_id=%s ORDER BY category, date_time", (session['user_id'],))
     rows = cur.fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Date', 'Item', 'Category', 'Cost', 'Total'])
-    running = 0
+    writer.writerow(['Expense Report'])
+    writer.writerow([])
+    
+    # Group by category
+    from collections import defaultdict
+    by_category = defaultdict(lambda: {'items': [], 'total': 0})
+    
     for r in rows:
         date, item, category, cost = r[0], r[1], r[2], r[3] if len(r) > 3 else r[3]
         try:
             c = float(cost)
         except Exception:
             c = 0
-        running += c
-        writer.writerow([date, item, category, c, running])
+        by_category[category]['items'].append((date, item, c))
+        by_category[category]['total'] += c
+    
+    # Write report by category
+    grand_total = 0
+    for category in EXPENSE_CATEGORIES:
+        if category in by_category:
+            writer.writerow([f'Category: {category}'])
+            writer.writerow(['Date', 'Item', 'Cost'])
+            for date, item, c in by_category[category]['items']:
+                writer.writerow([date, item, c])
+            writer.writerow([f'Subtotal: {category}', '', by_category[category]['total']])
+            writer.writerow([])
+            grand_total += by_category[category]['total']
 
     # append summary rows
-    # attempt to include total budget and remaining budget
     cur.execute("SELECT budget FROM users WHERE id=%s", (session['user_id'],))
     b = None
     if cur.fetchone():
@@ -622,7 +660,7 @@ def download_report():
 
     writer.writerow([])
     writer.writerow(['Total Budget', b if b is not None else 'N/A'])
-    writer.writerow(['Total Expense', running])
+    writer.writerow(['Total Expense', grand_total])
     if b is not None:
         writer.writerow(['Remaining', max(b, 0)])
 
@@ -642,11 +680,24 @@ def download_pdf():
     u = cur.fetchone()
     username = u[0] if u else 'User'
 
-    cur.execute("SELECT date_time, item, category, cost FROM expenses WHERE user_id=%s ORDER BY date_time", (session['user_id'],))
+    cur.execute("SELECT date_time, item, category, cost FROM expenses WHERE user_id=%s ORDER BY category, date_time", (session['user_id'],))
     rows = cur.fetchall()
 
+    # Group by category
+    from collections import defaultdict
+    by_category = defaultdict(lambda: {'items': [], 'total': 0})
+    
+    for r in rows:
+        date, item, category, cost = r[0], r[1], r[2], r[3] if len(r) > 3 else r[3]
+        try:
+            c = float(cost)
+        except Exception:
+            c = 0
+        by_category[category]['items'].append((date, item, c))
+        by_category[category]['total'] += c
+
     # totals and budget
-    total_expense = sum((r[3] or 0) for r in rows)
+    total_expense = sum(d['total'] for d in by_category.values())
     total_budget = 0
     remaining_budget = None
     cur.execute("SHOW COLUMNS FROM users LIKE 'budget'")
@@ -664,12 +715,7 @@ def download_pdf():
         except Exception:
             pct = 0
         try:
-            cur.execute(
-                "SELECT category, SUM(cost) as s FROM expenses WHERE user_id=%s GROUP BY category ORDER BY s DESC LIMIT 3",
-                (session['user_id'],)
-            )
-            cat_rows = cur.fetchall()
-            top_cats = [r[0] or 'Others' for r in cat_rows]
+            top_cats = [cat for cat in EXPENSE_CATEGORIES if cat in by_category][:3]
         except Exception:
             top_cats = []
         if total_expense > total_budget:
@@ -679,7 +725,7 @@ def download_pdf():
             ai_message = f"{pct:.0f}% of budget used. Top: {', '.join(top_cats) if top_cats else 'N/A'}."
 
     # render HTML, convert to PDF
-    rendered = render_template('report_pdf.html', username=username, rows=rows, total_budget=total_budget, total_expense=total_expense, remaining_budget=remaining_budget, ai_message=ai_message, generated_at=datetime.now())
+    rendered = render_template('report_pdf.html', username=username, by_category=by_category, categories=EXPENSE_CATEGORIES, total_budget=total_budget, total_expense=total_expense, remaining_budget=remaining_budget, ai_message=ai_message, generated_at=datetime.now())
     try:
         from weasyprint import HTML
         pdf = HTML(string=rendered).write_pdf()
@@ -729,7 +775,7 @@ def expenses_weeks():
     cur = mysql.connection.cursor()
     today = _dt.date.today()
     weeks = []
-    for i in range(0, 4):
+    for i in range(0, 8):
         # week starts on Monday
         ref = today - _dt.timedelta(weeks=i)
         start = ref - _dt.timedelta(days=ref.weekday())
@@ -899,6 +945,60 @@ def edit_expense():
     cur.execute("SELECT * FROM expenses WHERE id=%s", (eid,))
     updated = cur.fetchone()
     return jsonify({'row': updated, 'total_expense': total_exp, 'remaining_budget': rem, 'message':'Expense updated successfully'})
+
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    if session.get('role') != 'admin':
+        return redirect(url_for('login'))
+    
+    cur = mysql.connection.cursor()
+    # Get all users
+    cur.execute("SELECT id, username, email FROM users ORDER BY username")
+    users = cur.fetchall()
+    
+    # Build a dict of user_id -> {user_info, expenses_by_category, totals}
+    user_data = []
+    for u in users:
+        user_id, username, email = u[0], u[1], u[2]
+        
+        # Get all expenses for this user
+        cur.execute("SELECT date_time, item, category, cost FROM expenses WHERE user_id=%s ORDER BY category, date_time", (user_id,))
+        rows = cur.fetchall()
+        
+        # Group by category
+        from collections import defaultdict
+        by_category = defaultdict(lambda: {'items': [], 'total': 0})
+        total_exp = 0
+        
+        for r in rows:
+            date, item, category, cost = r[0], r[1], r[2], r[3] if len(r) > 3 else r[3]
+            try:
+                c = float(cost)
+            except Exception:
+                c = 0
+            by_category[category]['items'].append({'date': str(date), 'item': item, 'cost': c})
+            by_category[category]['total'] += c
+            total_exp += c
+        
+        # Get budget
+        cur.execute("SHOW COLUMNS FROM users LIKE 'budget'")
+        budget = None
+        if cur.fetchone():
+            cur.execute("SELECT budget FROM users WHERE id=%s", (user_id,))
+            b = cur.fetchone()
+            budget = float(b[0] or 0) if b else 0
+        
+        user_data.append({
+            'id': user_id,
+            'username': username,
+            'email': email,
+            'by_category': dict(by_category),
+            'total_expense': total_exp,
+            'budget': budget
+        })
+    
+    return render_template('admin_dashboard.html', users=user_data, categories=EXPENSE_CATEGORIES)
 
 
 @app.route('/delete-expense', methods=['POST'])

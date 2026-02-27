@@ -12,6 +12,7 @@
     th, td { border:1px solid #ccc; padding:6px; font-size:12px }
     th { background:#f0f0f0 }
     .right { text-align:right }
+    .category-header { background:#e8f4f8; font-weight:bold; margin-top:10px; }
     .summary { margin-top:12px }
     .ai { margin-top:14px; padding:10px; background:#f6fbff; border-left:4px solid #3b82f6 }
     .signature { margin-top:28px; display:flex; justify-content:space-between; }
@@ -30,13 +31,20 @@
       <tr><th style="width:18%">Date</th><th>Item</th><th>Category</th><th style="width:14%">Cost (Rs)</th></tr>
     </thead>
     <tbody>
-      {% for r in rows %}
-      <tr>
-        <td>{{ r[0] }}</td>
-        <td>{{ r[1] }}</td>
-        <td>{{ r[2] }}</td>
-        <td class="right">{{ '%.2f'|format(r[3] or 0) }}</td>
-      </tr>
+      {% for category in categories %}
+        {% if category in by_category %}
+          <tr class="category-header">
+            <td colspan="4">📌 {{ category }} (Total: Rs {{ '%.2f'|format(by_category[category].total) }})</td>
+          </tr>
+          {% for date, item, cost in by_category[category].items %}
+          <tr>
+            <td>{{ date }}</td>
+            <td>{{ item }}</td>
+            <td>{{ category }}</td>
+            <td class="right">{{ '%.2f'|format(cost) }}</td>
+          </tr>
+          {% endfor %}
+        {% endif %}
       {% endfor %}
     </tbody>
   </table>
